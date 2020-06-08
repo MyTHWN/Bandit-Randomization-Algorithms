@@ -1,13 +1,6 @@
-"""Classical algorithms for multi-armed, linear, and GLM bandits."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-# pylint: disable=invalid-name
+"""Use dropout for exploration for multi-armed and linear bandits."""
 
 import numpy as np
-
 
 class DropoutExploration:
   def __init__(self, env, n, params):
@@ -22,7 +15,6 @@ class DropoutExploration:
     self.reward = 1e-6 * np.ones(self.K)  # cumulative reward
     # self.tiebreak = 1e-6 * np.random.rand(self.K)  # tie breaking
 
-    self.grad = np.zeros(n)
     self.metrics = np.zeros((n, 3))
 
     # initialize baseline
@@ -48,10 +40,9 @@ class DropoutExploration:
   def get_arm(self, t):
     # decision statistics
     muhat = self.reward / self.pulls
-    drop_prob = self.drop_prob # * np.sqrt(self.K / (t + 1)) / 2
+    drop_prob = self.drop_prob * np.sqrt(self.K / (t + 1)) / 2
     drop_arms = (np.random.random(self.K) >= drop_prob).astype(int)
     muhat *= drop_arms
-    # print(muhat)
     best_arm = np.argmax(muhat)
 
     # pull the arm
@@ -64,7 +55,7 @@ class DropoutExploration:
     return "Dropout Exploration"
 
 
-class LinBanditAlg:
+class LinDropout:
   def __init__(self, env, n, params):
     self.env = env
     self.X = np.copy(env.X)
@@ -87,15 +78,15 @@ class LinBanditAlg:
     self.Gram += np.outer(x, x) / np.square(self.sigma)
     self.B += x * r / np.square(self.sigma)
 
-
-class LinDropout(LinBanditAlg):
   def get_arm(self, t):
     self.mu = np.zeros(self.K)
+
+    # pull each arm once at the beginning
     if t < self.K:
       self.mu[t] = np.Inf
     else:
       self.mu = np.zeros(self.K)
-      drop_prob = self.drop_prob # * np.sqrt(self.K / (t + 1)) / 2
+      drop_prob = self.drop_prob * np.sqrt(self.K / (t + 1)) / 2
       theta = np.linalg.solve(self.Gram, self.B)
 
       drop_dims = (np.random.random(self.d) >= drop_prob).astype(int)
@@ -111,15 +102,17 @@ class LinDropout(LinBanditAlg):
     return "Lin Dropout Exploration"
 
 
-class LinDropout_gradient(LinBanditAlg):
+class LinDropout_gradient(LinDropout):
   def __init__(self, env, n, params):
-    LinBanditAlg.__init__(self, env, n, params)
+    super().__init__(self, env, n, params)
     self.theta = np.random.rand(self.d)
     self.mask = np.ones(self.d) 
+    self.lr = 0.01
+    self.reg = 0.1
 
   def get_arm(self, t):
     self.mu = np.zeros(self.K)
-    drop_prob = self.drop_prob # * np.sqrt(self.K / (t + 1)) / 2
+    drop_prob = self.drop_prob * np.sqrt(self.K / (t + 1)) / 2
     drop_dims = (np.random.random(self.d) >= drop_prob).astype(int)
     drop_dims[-1] = 1
     #self.mask = np.ones(self.d) 
@@ -141,13 +134,13 @@ class LinDropout_gradient(LinBanditAlg):
   def update(self, t, arm, r):
     # logistic loss
     pred = np.dot(self.theta, self.X[arm])
-    grad = self.X[arm] * self.mask * (pred-r) + 0.1 * self.theta
+    grad = self.X[arm] * self.mask * (pred-r) + self.reg * self.theta
 
     self.theta -= self.lr * grad
 
   @staticmethod
   def print():
-    return "Lin Dropout Exploration"
+    return "Lin Dropout by Gradient Descent"
 
 
 
