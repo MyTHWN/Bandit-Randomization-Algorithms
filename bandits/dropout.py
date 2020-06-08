@@ -88,23 +88,6 @@ class LinBanditAlg:
     self.B += x * r / np.square(self.sigma)
 
 
-class LinGreedy(LinBanditAlg):
-  def get_arm(self, t):
-    self.mu = np.zeros(self.K)
-    if np.random.rand() < 0.05 * np.sqrt(self.n / (t + 1)) / 2:
-      self.mu[np.random.randint(self.K)] = np.Inf
-    else:
-      theta = np.linalg.solve(self.Gram, self.B)
-      self.mu = self.X.dot(theta)
-
-    arm = np.argmax(self.mu)
-    return arm
-
-  @staticmethod
-  def print():
-    return "Lin e-greedy"
-
-
 class LinDropout(LinBanditAlg):
   def get_arm(self, t):
     self.mu = np.zeros(self.K)
