@@ -234,7 +234,7 @@ class EpsilonGreedy:
     best_arm = np.argmax(muhat)
 
     # probabilities of pulling arms
-    eps = self.crs * self.epsilon
+    eps = self.crs * self.epsilon #* np.sqrt(self.K / (t + 1)) / 2
     p = (1 - eps) * (np.arange(self.K) == best_arm) + eps / self.K
 
     # pull the arm
