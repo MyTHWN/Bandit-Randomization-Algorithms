@@ -111,7 +111,9 @@ class PHE:
     self.mu = np.zeros(self.K)
     if t < self.K:
       # each arm is pulled once in the first K rounds
-      self.mu[t] = np.Inf
+      arm = t
+      return arm
+
     else:
       # history perturbation
       pseudo_pulls = np.ceil(self.a * self.pulls).astype(int)
@@ -152,7 +154,9 @@ class LinPHE:
   def get_arm(self, t):
     self.mu = np.zeros(self.K)
     if t < self.K:
-      self.mu[t] = np.Inf
+      arm = t
+      return arm
+      
     else:
       # history perturbation
       pseudo_pulls = np.ceil(self.a * self.pulls).astype(int)
@@ -171,70 +175,6 @@ class LinPHE:
   @staticmethod
   def print():
     return "LinPHE"
-
-
-class LinHistorySwap:
-  def __init__(self, env, n, params):
-    self.env = env
-    self.X = np.copy(env.X)
-    self.K = self.X.shape[0]
-    self.d = self.X.shape[1]
-    #self.swap_prob = swap_prob
-
-    for attr, val in params.items():
-      setattr(self, attr, val)
-
-    # sufficient statistics
-    self.pulls = np.zeros(self.K, dtype=int) # number of pulls
-    self.reward = np.zeros(self.K) # cumulative reward
-    self.tiebreak = 1e-6 * np.random.rand(self.K) # tie breaking
-    self.X2 = np.zeros((self.K, self.d, self.d)) # outer products of arm features
-    for k in range(self.K):
-      self.X2[k, :, :] = np.outer(self.X[k, :], self.X[k, :])
-    self.reward_hist = {i:[] for i in range(self.K)}
-
-  def update(self, t, arm, r):
-    self.pulls[arm] += 1
-    self.reward_hist[arm].append(r)
-    
-    if t >= self.K and np.random.random() < self.swap_prob:# * np.sqrt(self.K / (t + 1)) / 2:
-      #arm_swap = np.random.randint(self.K)
-      if self.swap_top == -1:
-        arm_swap = np.random.randint(self.K)
-      else:
-        arm_swap = np.random.choice(self.mu.argsort()[-self.swap_top:])
-      np.random.shuffle(self.reward_hist[arm])
-      np.random.shuffle(self.reward_hist[arm_swap])
-      self.reward_hist[arm][0], self.reward_hist[arm_swap][0] = \
-        self.reward_hist[arm_swap][0], self.reward_hist[arm][0]
-      
-      self.reward[arm] = np.sum(self.reward_hist[arm])
-      self.reward[arm_swap] = np.sum(self.reward_hist[arm_swap])
-    
-    else: 
-      self.reward[arm] += r #np.sum[self.reward_hist[arm]]
-
-  def get_arm(self, t):
-    self.mu = np.zeros(self.K)
-    if t < self.K:
-      self.mu[t] = np.Inf
-    else:
-      Gram = np.tensordot(self.pulls, self.X2, \
-        axes=([0], [0]))
-      B = self.X.T.dot(self.reward)
-
-      reg = 1e-3 * np.eye(self.d)
-      # Gram_inv = np.linalg.inv(Gram + reg)
-      # theta = Gram_inv.dot(B)
-      theta = np.linalg.solve(Gram + reg, B)
-      self.mu = self.X.dot(theta) + self.tiebreak
-
-    arm = np.argmax(self.mu)
-    return arm
-
-  @staticmethod
-  def print():
-    return "LinHistory-Swapping"
 
 
 class CoLinPHE:
@@ -357,6 +297,7 @@ class LogPHE:
   @staticmethod
   def print():
     return "LogPHE"
+
 
 class CoLogPHE:
   def __init__(self, env, n, params):
