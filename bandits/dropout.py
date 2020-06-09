@@ -7,6 +7,7 @@ class DropoutExploration:
     self.env = env
     self.K = env.K
     self.crs = 1.0  # confidence region scaling
+    self.drop_prob = self.K / np.sqrt(n)
 
     for attr, val in params.items():
       setattr(self, attr, val)
@@ -40,7 +41,7 @@ class DropoutExploration:
   def get_arm(self, t):
     # decision statistics
     muhat = self.reward / self.pulls
-    drop_prob = self.drop_prob * np.sqrt(self.K / (t + 1)) / 2
+    drop_prob = self.drop_prob #* np.sqrt(self.K / (t + 1)) / 2
     drop_arms = (np.random.random(self.K) >= drop_prob).astype(int)
     muhat *= drop_arms
     best_arm = np.argmax(muhat)
@@ -104,7 +105,7 @@ class LinDropout:
 
 class LinDropout_gradient(LinDropout):
   def __init__(self, env, n, params):
-    super().__init__(self, env, n, params)
+    super().__init__(env, n, params)
     self.theta = np.random.rand(self.d)
     self.mask = np.ones(self.d) 
     self.lr = 0.01
