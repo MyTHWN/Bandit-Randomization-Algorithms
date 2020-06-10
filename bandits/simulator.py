@@ -387,7 +387,7 @@ def evaluate_parallel(Alg, params, exp_envs, n=1000, num_process=10,
 
   if printout:
     total_regret = all_regret.sum(axis=0)
-    print(total_regret)
+    #print(total_regret)
     print("Regret: %.2f +/- %.2f (median: %.2f, max: %.2f, min: %.2f)" %
       (total_regret.mean(), total_regret.std() / np.sqrt(num_exps),
       np.median(total_regret), total_regret.max(), total_regret.min()))
