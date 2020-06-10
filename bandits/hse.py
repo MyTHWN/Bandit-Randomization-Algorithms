@@ -98,18 +98,6 @@ class HistorySwapping_MD:
     self.reward[arm] += r
     self.reward_hist[arm].append(r)
     
-    # if t >= self.K and np.random.random() < self.swap_prob:
-    #     arm_swap = np.random.randint(self.K)
-    #     np.random.shuffle(self.reward_hist[arm])
-    #     np.random.shuffle(self.reward_hist[arm_swap])
-    #     self.reward_hist[arm][0], self.reward_hist[arm_swap][0] = \
-    #         self.reward_hist[arm_swap][0], self.reward_hist[arm][0]
-        
-    #     self.reward[arm] = np.sum(self.reward_hist[arm])
-    #     self.reward[arm_swap] = np.sum(self.reward_hist[arm_swap])
-    # else: 
-    #     self.reward[arm] += r
-        
     best_r = self.env.rt[self.env.best_arm]
     if self.is_baseline:
       # baseline action and update
@@ -178,15 +166,20 @@ class FreshHistorySwapping(HistorySwapping):
               swapped_reward_history[arm_swap][0], swapped_reward_history[best_arm][r_idx]
       '''
     
-      num_samples = int(np.ceil(self.swap_prob*len(self.reward_hist[best_arm])))
-      sampled_rewards = np.random.choice(self.reward_hist[best_arm], num_samples)
+      # num_samples = int(np.ceil(self.swap_prob*len(self.reward_hist[best_arm])))
+      # sampled_rewards = np.random.choice(self.reward_hist[best_arm], num_samples)
+      
+      sampled_indexes = (np.random.random(len(self.reward_hist[best_arm])) < \
+          self.swap_prob*np.ones(len(self.reward_hist[best_arm]))).astype(int)
+      sampled_rewards = np.array(self.reward_hist[best_arm])[np.where(sampled_indexes == 1)[0]]
+
       swapped_reward[best_arm] -= np.sum(sampled_rewards)
 
       arms_to_swap = np.random.choice(self.K, len(sampled_rewards), replace=True)
       for i, reward in enumerate(sampled_rewards):
         arm_swap = arms_to_swap[i]
-        # sample_a_reward = np.random.choice(self.reward_hist[arm_swap])
-        sample_a_reward = self.reward_hist[arm_swap][np.random.randint(len(self.reward_hist[arm_swap]))]
+        sample_a_reward = np.random.choice(self.reward_hist[arm_swap])
+        # sample_a_reward = self.reward_hist[arm_swap][np.random.randint(len(self.reward_hist[arm_swap]))]
         swapped_reward[arm_swap] += - sample_a_reward + reward
         swapped_reward[best_arm] += sample_a_reward
 
