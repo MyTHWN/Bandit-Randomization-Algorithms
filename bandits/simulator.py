@@ -1,5 +1,4 @@
 """Bandit simulator and environments."""
-'''Commit from pycharm.'''
 
 from __future__ import absolute_import
 from __future__ import division
