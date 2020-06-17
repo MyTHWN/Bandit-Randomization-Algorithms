@@ -10,6 +10,7 @@ import time
 import numpy as np
 import multiprocessing as mp
 
+
 class BerBandit(object):
   """Bernoulli bandit."""
 
@@ -380,7 +381,7 @@ def evaluate_parallel(Alg, params, exp_envs, n=1000, num_process=10,
 
   for job in jobs:
     job.join()
-    
+
   if printout:
     print(" %.1f seconds" % (time.time() - start))
 
