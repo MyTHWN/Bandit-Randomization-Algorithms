@@ -29,6 +29,7 @@ class HistorySwapping:
     self.pulls[arm] += 1
     self.reward_hist[arm].append(r)
     
+    # fisrt pull the arm before swapping the history.
     if t >= self.K and np.random.random() < self.swap_prob:
         arm_swap = np.random.randint(self.K)
         np.random.shuffle(self.reward_hist[arm])
@@ -119,6 +120,7 @@ class HistorySwapping_MD:
     muhat = self.reward / self.pulls
     best_arm = np.argmax(muhat)
 
+    # fisrt swap the histroy before pulling the arm.
     if np.random.random() < self.swap_prob:
       arm_swap = np.random.randint(self.K)
       np.random.shuffle(self.reward_hist[best_arm])
