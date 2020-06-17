@@ -76,9 +76,8 @@ class HistorySwapping:
     self.reward[arm] += r
     self.reward_hist[arm].append(r)
 
+    best_r = self.env.rt[self.env.best_arm]
     if self.is_baseline:
-      best_r = self.env.rt[self.env.best_arm]
-
       # baseline action and update
       base_arm = self.base_alg.get_arm(t)
       base_r = self.env.reward(base_arm)
@@ -88,11 +87,12 @@ class HistorySwapping:
     else:
       self.metrics[t, :] = np.asarray([r, r - best_r, 0])
 
-  def print(self):
-    return "Histroy-Swapping swap_prob:{}".format(self.swap_prob)
+  @staticmethod
+  def print():
+    return "Histroy-Swapping"
 
 
-class LinHistorySwap(LinHistorySwap):
+class LinHistorySwap:
   def __init__(self, env, n, params):
     self.env = env
     self.X = np.copy(env.X)
@@ -172,8 +172,9 @@ class LinHistorySwap(LinHistorySwap):
     arm = best_arm
     return arm
 
-  def print(self):
-    return "Lin History-Swapping swap_prob:{}".format(self.swap_prob)
+  @staticmethod
+  def print():
+    return "Lin History-Swapping"
 
 
 
