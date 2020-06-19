@@ -110,7 +110,6 @@ class GaussBandit(object):
       ", ".join("%.3f" % s for s in self.mu)
 
 
-#need to set the type of noise in Linear bandits
 class LinBandit(object):
   """Linear bandit."""
 
