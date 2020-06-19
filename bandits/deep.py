@@ -15,7 +15,7 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 
-from google3.pyglib import gfile
+# from google3.pyglib import gfile
 
 
 class BinaryClassBandit(object):
