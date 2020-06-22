@@ -312,7 +312,8 @@ class DeepHS:
     if t >= self.batch_size:
       swapped_y = np.copy(self.y)
       reward_pool = []
-      index_pool = np.where(np.random.random(swapped_y.size) < self.swap_prob)[0]
+      index_pool = np.where(np.random.random(swapped_y.size) \
+                            < self.swap_prob)[0]
 
       reward_pool = swapped_y[index_pool]
       np.random.shuffle(reward_pool)
