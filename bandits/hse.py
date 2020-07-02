@@ -177,4 +177,146 @@ class LinHistorySwap:
     return "Lin History-Swapping"
 
 
+class HistorySwapping_SWR:
+  def __init__(self, env, n, params):
+    self.env = env
+    self.K = env.K
+    self.sample_portion = 1
+
+    for attr, val in params.items():
+      setattr(self, attr, val)
+
+    self.pulls = np.zeros(self.K)  # number of pulls
+    self.reward = np.zeros(self.K)  # cumulative reward
+    # self.reward_hist = {i: [] for i in range(self.K)}
+    self.all_rewards = []
+
+    self.metrics = np.zeros((n, 3))
+
+    # initialize baseline
+    self.is_baseline = hasattr(self, "base_Alg")
+    if self.is_baseline:
+      self.base_alg = self.base_Alg(env, n, self.base_params)
+
+  def get_arm(self, t):
+    if t < self.K:
+      # each arm is pulled once in the first K rounds
+      arm = t
+      return arm
+
+    # swapped_reward_history = copy.copy(self.reward_hist)
+    muhat = self.reward / self.pulls
+    best_arm = np.argmax(muhat)
+
+    if self.sample_portion > 0:
+      # swap reward history between the best arm and the other arms
+      swapped_reward = np.copy(self.reward)
+      swapped_pulls = np.copy(self.pulls)
+      np.random.shuffle(self.all_rewards)
+      for arm in range(self.K):
+        num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
+        sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+                                           replace=True)
+        swapped_reward[arm] += np.sum(sampled_rewards)
+        swapped_pulls[arm] += num_samples
+
+      muhat = swapped_reward / swapped_pulls
+      best_arm = np.argmax(muhat)
+
+    arm = best_arm
+    return arm
+
+  def update(self, t, arm, r):
+    self.pulls[arm] += 1
+    self.reward[arm] += r
+    # self.reward_hist[arm].append(r)
+    self.all_rewards.append(r)
+
+    best_r = self.env.rt[self.env.best_arm]
+    if self.is_baseline:
+      # baseline action and update
+      base_arm = self.base_alg.get_arm(t)
+      base_r = self.env.reward(base_arm)
+      self.base_alg.update(t, base_arm, base_r)
+
+      self.metrics[t, :] = np.asarray([r, r - best_r, r - base_r])
+    else:
+      self.metrics[t, :] = np.asarray([r, r - best_r, 0])
+
+  @staticmethod
+  def print():
+    return "Histroy-Swapping-SampleWithReplacement"
+
+
+class LinHistorySwap_SWR:
+  def __init__(self, env, n, params):
+    self.env = env
+    self.X = np.copy(env.X)
+    self.K = self.X.shape[0]
+    self.d = self.X.shape[1]
+    self.sample_portion = 1
+
+    for attr, val in params.items():
+      setattr(self, attr, val)
+
+    # sufficient statistics
+    self.pulls = np.zeros(self.K, dtype=int)  # number of pulls
+    self.reward = np.zeros(self.K)  # cumulative reward
+    # self.tiebreak = 1e-6 * np.random.rand(self.K) # tie breaking
+    self.X2 = np.zeros((self.K, self.d, self.d))  # outer products of arm features
+    for k in range(self.K):
+      self.X2[k, :, :] = np.outer(self.X[k, :], self.X[k, :])
+    # self.reward_hist = {i: [] for i in range(self.K)}
+    self.all_rewards = []
+
+  def update(self, t, arm, r):
+    self.pulls[arm] += 1
+    self.reward[arm] += r  # np.sum[self.reward_hist[arm]]
+    # self.reward_hist[arm].append(r)
+    self.all_rewards.append(r)
+
+  def get_arm(self, t):
+    if t < self.K:
+      arm = t
+      return arm
+
+    Gram = np.tensordot(self.pulls, self.X2, \
+                        axes=([0], [0]))
+    B = self.X.T.dot(self.reward)
+
+    reg = 1e-3 * np.eye(self.d)
+    # Gram_inv = np.linalg.inv(Gram + reg)
+    # theta = Gram_inv.dot(B)
+    theta = np.linalg.solve(Gram + reg, B)
+    self.mu = self.X.dot(theta) + 1e-6 * np.random.rand(self.K)
+
+    best_arm = np.argmax(self.mu)
+
+    if self.sample_portion > 0:
+      swapped_reward = np.copy(self.reward)
+      swapped_pulls = np.copy(self.pulls)
+      np.random.shuffle(self.all_rewards)
+
+      for arm in range(self.K):
+        num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
+        sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+                                           replace=True)
+        swapped_reward[arm] += np.sum(sampled_rewards)
+        swapped_pulls[arm] += num_samples
+
+      swapped_Gram = np.tensordot(swapped_pulls, self.X2, \
+                          axes=([0], [0]))
+      swapped_B = self.X.T.dot(swapped_reward)
+      swapped_theta = np.linalg.solve(swapped_Gram + reg, swapped_B)
+      swapped_mu = self.X.dot(swapped_theta) + 1e-6 * np.random.rand(self.K)
+
+      best_arm = np.argmax(swapped_mu)
+
+    arm = best_arm
+    return arm
+
+  @staticmethod
+  def print():
+    return "Lin History-Swapping-SampleWithReplacement"
+
 
