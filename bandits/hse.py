@@ -215,8 +215,11 @@ class HistorySwapping_SWR:
       np.random.shuffle(self.all_rewards)
       for arm in range(self.K):
         num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
-        sampled_rewards = np.random.choice(self.all_rewards, num_samples,
-                                           replace=True)
+        # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+        #                                    replace=True)
+        sampled_indexes = np.random.randint(len(self.all_rewards),
+                                            size=num_samples)
+        sampled_rewards = np.array(self.all_rewards)[sampled_indexes]
         swapped_reward[arm] += np.sum(sampled_rewards)
         swapped_pulls[arm] += num_samples
 
@@ -299,8 +302,11 @@ class LinHistorySwap_SWR:
 
       for arm in range(self.K):
         num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
-        sampled_rewards = np.random.choice(self.all_rewards, num_samples,
-                                           replace=True)
+        # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+        #                                    replace=True)
+        sampled_indexes = np.random.randint(len(self.all_rewards),
+                                            size=num_samples)
+        sampled_rewards = np.array(self.all_rewards)[sampled_indexes]
         swapped_reward[arm] += np.sum(sampled_rewards)
         swapped_pulls[arm] += num_samples
 
