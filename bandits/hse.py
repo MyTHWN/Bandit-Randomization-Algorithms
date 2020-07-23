@@ -208,13 +208,15 @@ class HS_SWR:
       # Mixing reward history among arms
       swapped_reward = np.copy(self.reward)
       swapped_pulls = np.copy(self.pulls)
+      reward_pool = np.copy(self.all_rewards)
+
       for arm in range(self.K):
         num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
-        # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+        # sampled_rewards = np.random.choice(reward_pool, num_samples,
         #                                    replace=True)
-        sampled_indexes = np.random.randint(len(self.all_rewards),
+        sampled_indexes = np.random.randint(len(reward_pool),
                                             size=num_samples)
-        sampled_rewards = np.array(self.all_rewards)[sampled_indexes]
+        sampled_rewards = np.array(reward_pool)[sampled_indexes]
         swapped_reward[arm] += np.sum(sampled_rewards)
         # swapped_pulls[arm] += num_samples
 
@@ -285,14 +287,15 @@ class LinHS_SWR:
       swapped_pulls = np.copy(self.pulls)
       # np.random.shuffle(self.all_rewards)
       mean_all_rewards = np.mean(self.all_rewards)
+      reward_pool = np.copy(self.all_rewards)
 
       for arm in range(self.K):
         num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
-        # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+        # sampled_rewards = np.random.choice(reward_pool, num_samples,
         #                                    replace=True)
-        sampled_indexes = np.random.randint(len(self.all_rewards),
+        sampled_indexes = np.random.randint(len(reward_pool),
                                             size=num_samples)
-        sampled_rewards = np.array(self.all_rewards)[sampled_indexes]
+        sampled_rewards = np.array(reward_pool)[sampled_indexes]
         swapped_reward[arm] += np.sum(sampled_rewards) - \
                                num_samples * mean_all_rewards
         # swapped_pulls[arm] += num_samples
@@ -384,7 +387,7 @@ class LinHS_SWR_MirrorPool(LinHS_SWR):
 
       for arm in range(self.K):
         num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
-        # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+        # sampled_rewards = np.random.choice(mirror_reward_pool, num_samples,
         #                                    replace=True)
         sampled_indexes = np.random.randint(len(mirror_reward_pool),
                                             size=num_samples)
