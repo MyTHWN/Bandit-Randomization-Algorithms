@@ -118,6 +118,8 @@ class PHE:
       # history perturbation
       pseudo_pulls = np.ceil(self.a * self.pulls).astype(int)
       pseudo_reward = np.random.binomial(pseudo_pulls, 0.5)
+      # pseudo_reward = np.random.normal(0.5 * pseudo_pulls, \
+      #                                  0.5 * np.sqrt(pseudo_pulls))
       self.mu = (self.reward + pseudo_reward) / \
         (self.pulls + pseudo_pulls) + self.tiebreak
 
@@ -160,7 +162,12 @@ class LinPHE:
     else:
       # history perturbation
       pseudo_pulls = np.ceil(self.a * self.pulls).astype(int)
-      pseudo_reward = np.random.binomial(pseudo_pulls, 0.5)
+      if self.env.noise == "normal":
+        pseudo_reward = np.random.normal(self.env.sigma * pseudo_pulls, \
+                                  self.env.sigma * np.sqrt(pseudo_pulls))
+      else:
+        pseudo_reward = np.random.binomial(pseudo_pulls, 0.5)
+
       Gram = np.tensordot(self.pulls + pseudo_pulls, self.X2, \
         axes=([0], [0]))
       B = self.X.T.dot(self.reward + pseudo_reward)

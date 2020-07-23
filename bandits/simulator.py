@@ -52,13 +52,12 @@ class BetaBandit(object):
     self.a_plus_b = a_plus_b
 
     self.best_arm = np.argmax(self.mu)
-
     self.randomize()
 
   def randomize(self):
     # generate random rewards
-    self.rt = \
-      np.random.beta(self.a_plus_b * self.mu, self.a_plus_b * (1 - self.mu))
+    self.rt = np.random.beta(self.a_plus_b * self.mu,
+                             self.a_plus_b * (1 - self.mu))
 
   def reward(self, arm):
     # instantaneous reward of the arm
@@ -113,7 +112,7 @@ class GaussBandit(object):
 class LinBandit(object):
   """Linear bandit."""
 
-  def __init__(self, X, theta, noise="normal", sigma=0.2):
+  def __init__(self, X, theta, noise="normal", sigma=0.5):
     self.X = np.copy(X)
     self.K = self.X.shape[0]
     self.d = self.X.shape[1]
@@ -315,7 +314,8 @@ def evaluate(Alg, params, env, n=1000, period_size=1, printout=True):
   return regret, alg
 
 
-def evaluate_one_worker(Alg, params, exp_envs, n, period_size, shared_vars, exps):
+def evaluate_one_worker(Alg, params, exp_envs, n, period_size,
+                        shared_vars, exps):
   """One run of a bandit algorithm."""
   all_regret = shared_vars['all_regret']
   all_alg = shared_vars['all_alg']
@@ -347,7 +347,7 @@ def evaluate_one_worker(Alg, params, exp_envs, n, period_size, shared_vars, exps
     print(".", end="")
 
 
-def evaluate_parallel(Alg, params, exp_envs, n=1000, num_process=10, 
+def evaluate_parallel(Alg, params, exp_envs, n=1000, num_process=10,
                       period_size=1, printout=True):
   """Multiple runs of a bandit algorithm in parallel."""
   if printout:

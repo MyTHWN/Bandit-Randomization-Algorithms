@@ -177,7 +177,7 @@ class LinHistorySwap:
     return "Lin History-Swapping"
 
 
-class HistorySwapping_SWR:
+class HS_SWR:
   def __init__(self, env, n, params):
     self.env = env
     self.K = env.K
@@ -188,8 +188,8 @@ class HistorySwapping_SWR:
 
     self.pulls = np.zeros(self.K)  # number of pulls
     self.reward = np.zeros(self.K)  # cumulative reward
-    # self.reward_hist = {i: [] for i in range(self.K)}
     self.all_rewards = []
+    self.tiebreak = 1e-6 * np.random.rand(self.K) # tie breaking
 
     self.metrics = np.zeros((n, 3))
 
@@ -204,15 +204,10 @@ class HistorySwapping_SWR:
       arm = t
       return arm
 
-    # swapped_reward_history = copy.copy(self.reward_hist)
-    muhat = self.reward / self.pulls
-    best_arm = np.argmax(muhat)
-
     if self.sample_portion > 0:
-      # swap reward history between the best arm and the other arms
+      # Mixing reward history among arms
       swapped_reward = np.copy(self.reward)
       swapped_pulls = np.copy(self.pulls)
-      np.random.shuffle(self.all_rewards)
       for arm in range(self.K):
         num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
         # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
@@ -221,9 +216,13 @@ class HistorySwapping_SWR:
                                             size=num_samples)
         sampled_rewards = np.array(self.all_rewards)[sampled_indexes]
         swapped_reward[arm] += np.sum(sampled_rewards)
-        swapped_pulls[arm] += num_samples
+        # swapped_pulls[arm] += num_samples
 
-      muhat = swapped_reward / swapped_pulls
+      muhat = swapped_reward / swapped_pulls + self.tiebreak
+      best_arm = np.argmax(muhat)
+
+    else:
+      muhat = self.reward / self.pulls + self.tiebreak
       best_arm = np.argmax(muhat)
 
     arm = best_arm
@@ -232,7 +231,6 @@ class HistorySwapping_SWR:
   def update(self, t, arm, r):
     self.pulls[arm] += 1
     self.reward[arm] += r
-    # self.reward_hist[arm].append(r)
     self.all_rewards.append(r)
 
     best_r = self.env.rt[self.env.best_arm]
@@ -248,10 +246,10 @@ class HistorySwapping_SWR:
 
   @staticmethod
   def print():
-    return "Histroy-Swapping-SampleWithReplacement"
+    return "HS-SampleWithReplacement"
 
 
-class LinHistorySwap_SWR:
+class LinHS_SWR:
   def __init__(self, env, n, params):
     self.env = env
     self.X = np.copy(env.X)
@@ -265,17 +263,16 @@ class LinHistorySwap_SWR:
     # sufficient statistics
     self.pulls = np.zeros(self.K, dtype=int)  # number of pulls
     self.reward = np.zeros(self.K)  # cumulative reward
-    # self.tiebreak = 1e-6 * np.random.rand(self.K) # tie breaking
-    self.X2 = np.zeros((self.K, self.d, self.d))  # outer products of arm features
+    self.tiebreak = 1e-6 * np.random.rand(self.K) # tie breaking
+    self.X2 = np.zeros((self.K, self.d, self.d))
+    # outer products of arm features
     for k in range(self.K):
       self.X2[k, :, :] = np.outer(self.X[k, :], self.X[k, :])
-    # self.reward_hist = {i: [] for i in range(self.K)}
     self.all_rewards = []
 
   def update(self, t, arm, r):
     self.pulls[arm] += 1
-    self.reward[arm] += r  # np.sum[self.reward_hist[arm]]
-    # self.reward_hist[arm].append(r)
+    self.reward[arm] += r
     self.all_rewards.append(r)
 
   def get_arm(self, t):
@@ -283,22 +280,11 @@ class LinHistorySwap_SWR:
       arm = t
       return arm
 
-    Gram = np.tensordot(self.pulls, self.X2, \
-                        axes=([0], [0]))
-    B = self.X.T.dot(self.reward)
-
-    reg = 1e-3 * np.eye(self.d)
-    # Gram_inv = np.linalg.inv(Gram + reg)
-    # theta = Gram_inv.dot(B)
-    theta = np.linalg.solve(Gram + reg, B)
-    self.mu = self.X.dot(theta) + 1e-6 * np.random.rand(self.K)
-
-    best_arm = np.argmax(self.mu)
-
     if self.sample_portion > 0:
       swapped_reward = np.copy(self.reward)
       swapped_pulls = np.copy(self.pulls)
-      np.random.shuffle(self.all_rewards)
+      # np.random.shuffle(self.all_rewards)
+      mean_all_rewards = np.mean(self.all_rewards)
 
       for arm in range(self.K):
         num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
@@ -307,22 +293,130 @@ class LinHistorySwap_SWR:
         sampled_indexes = np.random.randint(len(self.all_rewards),
                                             size=num_samples)
         sampled_rewards = np.array(self.all_rewards)[sampled_indexes]
-        swapped_reward[arm] += np.sum(sampled_rewards)
-        swapped_pulls[arm] += num_samples
+        swapped_reward[arm] += np.sum(sampled_rewards) - \
+                               num_samples * mean_all_rewards
+        # swapped_pulls[arm] += num_samples
 
       swapped_Gram = np.tensordot(swapped_pulls, self.X2, \
                           axes=([0], [0]))
       swapped_B = self.X.T.dot(swapped_reward)
       swapped_theta = np.linalg.solve(swapped_Gram + reg, swapped_B)
-      swapped_mu = self.X.dot(swapped_theta) + 1e-6 * np.random.rand(self.K)
+      swapped_mu = self.X.dot(swapped_theta) + self.tiebreak
 
       best_arm = np.argmax(swapped_mu)
+
+    else:
+      Gram = np.tensordot(self.pulls, self.X2, \
+                          axes=([0], [0]))
+      B = self.X.T.dot(self.reward)
+
+      reg = 1e-3 * np.eye(self.d)
+      # Gram_inv = np.linalg.inv(Gram + reg)
+      # theta = Gram_inv.dot(B)
+      theta = np.linalg.solve(Gram + reg, B)
+      self.mu = self.X.dot(theta) + self.tiebreak
+
+      best_arm = np.argmax(self.mu)
 
     arm = best_arm
     return arm
 
   @staticmethod
   def print():
-    return "Lin History-Swapping-SampleWithReplacement"
+    return "Lin HS-SampleWithReplacement"
 
 
+class HS_SWR_MirrorPool(HS_SWR):
+
+  def get_arm(self, t):
+    if t < self.K:
+      # each arm is pulled once in the first K rounds
+      arm = t
+      return arm
+
+    if self.sample_portion > 0:
+      # Mixing reward history among arms
+      swapped_reward = np.copy(self.reward)
+      swapped_pulls = np.copy(self.pulls)
+      mean_all_rewards = np.mean(self.all_rewards)
+      mirrors = 2 * mean_all_rewards - np.array(self.all_rewards)
+      mirror_reward_pool = np.concatenate((mirrors, self.all_rewards))
+
+      for arm in range(self.K):
+        num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
+        # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+        #                                    replace=True)
+        sampled_indexes = np.random.randint(len(mirror_reward_pool),
+                                            size=num_samples)
+        sampled_rewards = np.array(mirror_reward_pool)[sampled_indexes]
+        swapped_reward[arm] += np.sum(sampled_rewards)
+        # swapped_pulls[arm] += num_samples
+
+      muhat = swapped_reward / swapped_pulls + self.tiebreak
+      best_arm = np.argmax(muhat)
+
+    else:
+      muhat = self.reward / self.pulls + self.tiebreak
+      best_arm = np.argmax(muhat)
+
+    arm = best_arm
+    return arm
+
+  @staticmethod
+  def print():
+    return "HS-SWR_mirrored_pool"
+
+
+class LinHS_SWR_MirrorPool(LinHS_SWR):
+
+  def get_arm(self, t):
+    if t < self.K:
+      arm = t
+      return arm
+
+    if self.sample_portion > 0:
+      swapped_reward = np.copy(self.reward)
+      swapped_pulls = np.copy(self.pulls)
+      # np.random.shuffle(self.all_rewards)
+      mean_all_rewards = np.mean(self.all_rewards)
+      mirrors = 2 * mean_all_rewards - np.array(self.all_rewards)
+      mirror_reward_pool = np.concatenate((mirrors, self.all_rewards))
+
+      for arm in range(self.K):
+        num_samples = int(np.ceil(self.sample_portion * self.pulls[arm]))
+        # sampled_rewards = np.random.choice(self.all_rewards, num_samples,
+        #                                    replace=True)
+        sampled_indexes = np.random.randint(len(mirror_reward_pool),
+                                            size=num_samples)
+        sampled_rewards = np.array(mirror_reward_pool)[sampled_indexes]
+        swapped_reward[arm] += np.sum(sampled_rewards) - \
+                               num_samples * mean_all_rewards
+        # swapped_pulls[arm] += num_samples
+
+      swapped_Gram = np.tensordot(swapped_pulls, self.X2, \
+                          axes=([0], [0]))
+      swapped_B = self.X.T.dot(swapped_reward)
+      swapped_theta = np.linalg.solve(swapped_Gram + reg, swapped_B)
+      swapped_mu = self.X.dot(swapped_theta) + self.tiebreak
+
+      best_arm = np.argmax(swapped_mu)
+
+    else:
+      Gram = np.tensordot(self.pulls, self.X2, \
+                          axes=([0], [0]))
+      B = self.X.T.dot(self.reward)
+
+      reg = 1e-3 * np.eye(self.d)
+      # Gram_inv = np.linalg.inv(Gram + reg)
+      # theta = Gram_inv.dot(B)
+      theta = np.linalg.solve(Gram + reg, B)
+      self.mu = self.X.dot(theta) + self.tiebreak
+
+      best_arm = np.argmax(self.mu)
+
+    arm = best_arm
+    return arm
+
+  @staticmethod
+  def print():
+    return "Lin HS-SWR_mirrored_pool"
