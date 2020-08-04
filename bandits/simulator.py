@@ -15,6 +15,7 @@ class BerBandit(object):
   """Bernoulli bandit."""
 
   def __init__(self, mu):
+    np.random.RandomState()
     self.mu = np.copy(mu)
     self.K = self.mu.size
 
@@ -47,6 +48,7 @@ class BetaBandit(object):
   """Beta bandit."""
 
   def __init__(self, mu, a_plus_b=4):
+    np.random.RandomState()
     self.mu = np.copy(mu)
     self.K = self.mu.size
     self.a_plus_b = a_plus_b
@@ -80,6 +82,7 @@ class GaussBandit(object):
   """Gaussian bandit."""
 
   def __init__(self, mu, sigma=0.5):
+    np.random.RandomState()
     self.mu = np.copy(mu)
     self.K = self.mu.size
     self.sigma = sigma
@@ -113,6 +116,7 @@ class LinBandit(object):
   """Linear bandit."""
 
   def __init__(self, X, theta, noise="normal", sigma=0.5):
+    np.random.RandomState()
     self.X = np.copy(X)
     self.K = self.X.shape[0]
     self.d = self.X.shape[1]
@@ -163,6 +167,7 @@ class LogBandit(object):
   """Logistic bandit."""
 
   def __init__(self, X, theta):
+    np.random.RandomState()
     self.X = np.copy(X)
     self.K = self.X.shape[0]
     self.d = self.X.shape[1]
