@@ -135,7 +135,7 @@ class KLUCB:
 class TS:
   def __init__(self, env, n, params):
     self.K = env.K
-    self.crs = 1.0  # confidence region scaling
+    self.crs = 0.5  # confidence region scaling
 
     for attr, val in params.items():
       setattr(self, attr, val)
@@ -160,6 +160,139 @@ class TS:
   @staticmethod
   def print():
     return "TS"
+
+
+class MNomialTS:
+  def __init__(self, env, n, params):
+    self.K = env.K
+    self.M = 10
+
+    for attr, val in params.items():
+      setattr(self, attr, val)
+
+    self.reward_cnt = np.ones((self.K, self.M+1))
+    self.reward_support = np.arange(self.M+1) / self.M
+
+  def update(self, t, arm, r):
+    m = np.sum(r >= self.reward_support) - 1
+
+    if np.random.random() <= self.M * r - m:
+      self.reward_cnt[arm][m+1] += 1
+    else:
+      self.reward_cnt[arm][m] += 1
+
+  def get_arm(self, t):
+    self.mu = np.zeros(self.K)
+
+    for i in range(self.K):
+      L = np.random.dirichlet(self.reward_cnt[i])
+      self.mu[i] = np.dot(self.reward_support, L)
+
+    arm = np.argmax(self.mu)
+    return arm
+
+  @staticmethod
+  def print():
+    return "Multinomial TS"
+
+
+class NonParaTS:
+  def __init__(self, env, n, params):
+    self.K = env.K
+    self.M = 10
+
+    for attr, val in params.items():
+      setattr(self, attr, val)
+
+    self.pulls = [[1] for _ in range(self.K)]
+    self.rewards = [[1] for _ in range(self.K)]
+
+  def update(self, t, arm, r):
+    if r in self.rewards[arm]:
+      pos = np.where(self.rewards[arm] == r)[0][0]
+      self.pulls[arm][pos] += 1
+    else:
+      self.rewards[arm].append(r)
+      self.pulls[arm].append(1)
+
+  def get_arm(self, t):
+    self.mu = np.zeros(self.K)
+
+    for i in range(self.K):
+      L = np.random.dirichlet(self.pulls[i])
+      self.mu[i] = np.dot(self.rewards[i], L)
+
+    arm = np.argmax(self.mu)
+    return arm
+
+  @staticmethod
+  def print():
+    return "Non-Parametric TS"
+
+
+class SSMC:
+  def __init__(self, env, n, params):
+    self.K = env.K
+
+    for attr, val in params.items():
+      setattr(self, attr, val)
+
+    self.pulls = np.zeros(self.K)
+    self.rewards = [[] for _ in range(self.K)]
+    self.arm_queue = []
+    self.leader = None
+
+  def update(self, t, arm, r):
+    self.pulls[arm] += 1
+    self.rewards[arm].append(r)
+
+  def get_arm(self, t):
+    if t < self.K:
+      arm = t
+      return arm
+
+    if self.arm_queue:
+      arm = np.random.choice(self.arm_queue)
+      self.arm_queue.remove(arm)
+      return arm
+
+    max_pulls = np.max(self.pulls)
+    leaders = np.where(self.pulls == max_pulls)[0]
+    if len(leaders) > 1:
+      mean_rewards = [np.mean(self.rewards[l]) for l in leaders]
+      max_mean = np.max(mean_rewards)
+      highest_mean = np.where(mean_rewards == max_mean)[0]
+      if len(highest_mean) > 1:
+        if not self.leader:
+          self.leader = np.random.choice(leaders[highest_mean])
+      else:
+        self.leader = leaders[highest_mean[0]]
+      # print('a', self.leader)
+    else:
+      self.leader = leaders[0]
+      # print('b', self.leader)
+
+    for i in range(self.K):
+      if i == self.leader:
+        continue
+
+      if self.pulls[i] < max_pulls:
+        if self.pulls[i] < np.sqrt(np.log(t+1)):
+          self.arm_queue.append(i)
+        elif np.mean(self.rewards[i]) >= \
+          np.mean(self.rewards[self.leader][-int(self.pulls[i]):]):
+          self.arm_queue.append(i)
+
+    if self.arm_queue:
+      arm = np.random.choice(self.arm_queue)
+      self.arm_queue.remove(arm)
+      return arm
+    else:
+      return self.leader
+
+  @staticmethod
+  def print():
+    return "SSMC"
 
 
 class GaussTS:
@@ -250,97 +383,6 @@ class EpsilonGreedy:
   @staticmethod
   def print():
     return "e-greedy"
-
-
-class HistorySwapping:
-  def __init__(self, env, n, params):
-    self.env = env
-    self.K = env.K
-    #self.swap_prob = swap_prob
-    self.crs = 1.0  # confidence region scaling
-
-    for attr, val in params.items():
-      setattr(self, attr, val)
-
-    self.pulls = np.ones(self.K)  # number of pulls
-    self.reward = np.ones(self.K)  # cumulative reward
-    # self.tiebreak = 1e-6 * np.random.rand(self.K)  # tie breaking
-
-    self.grad = np.zeros(n)
-    self.metrics = np.zeros((n, 3))
-
-    # initialize baseline
-    self.is_baseline = hasattr(self, "base_Alg")
-    if self.is_baseline:
-      self.base_alg = self.base_Alg(env, n, self.base_params)
-    self.reward_hist = {i:[1] for i in range(self.K)}
-    
-  '''
-  def update(self, t, arm, r):
-    self.pulls[arm] += 1
-    self.reward[arm] += r
-
-    best_r = self.env.rt[self.env.best_arm]
-    if self.is_baseline:
-      # baseline action and update
-      base_arm = self.base_alg.get_arm(t)
-      base_r = self.env.reward(base_arm)
-      self.base_alg.update(t, base_arm, base_r)
-
-      self.metrics[t, :] = np.asarray([r, r - best_r, r - base_r])
-    else:
-      self.metrics[t, :] = np.asarray([r, r - best_r, 0])
-  '''
-
-  def update(self, t, arm, r):
-    self.pulls[arm] += 1
-    self.reward_hist[arm].append(r)
-    
-    if np.random.random() < self.swap_prob:
-        arm_swap = np.random.randint(self.K)
-        np.random.shuffle(self.reward_hist[arm])
-        np.random.shuffle(self.reward_hist[arm_swap])
-        self.reward_hist[arm][0], self.reward_hist[arm_swap][0] = \
-            self.reward_hist[arm_swap][0], self.reward_hist[arm][0]
-        
-        self.reward[arm] = np.sum(self.reward_hist[arm])
-        self.reward[arm_swap] = np.sum(self.reward_hist[arm_swap])
-    else: 
-        self.reward[arm] += r
-        
-    best_r = self.env.rt[self.env.best_arm]
-    if self.is_baseline:
-      # baseline action and update
-      base_arm = self.base_alg.get_arm(t)
-      base_r = self.env.reward(base_arm)
-      self.base_alg.update(t, base_arm, base_r)
-
-      self.metrics[t, :] = np.asarray([r, r - best_r, r - base_r])
-    else:
-      self.metrics[t, :] = np.asarray([r, r - best_r, 0])
-
-  def get_arm(self, t):
-    # decision statistics
-    muhat = self.reward / self.pulls
-    best_arm = np.argmax(muhat)
-
-    # probabilities of pulling arms
-    # eps = self.crs * self.epsilon
-    # p = (1 - eps) * (np.arange(self.K) == best_arm) + eps / self.K
-
-    # pull the arm
-    arm = best_arm
-    # if np.random.rand() < eps:
-      # arm = np.random.randint(self.K)
-
-    # derivative of the probability of the pulled arm
-    # self.grad[t] = self.epsilon * (1 / self.K - (arm == best_arm)) / p[arm]
-
-    return arm
-
-  @staticmethod
-  def print():
-    return "Histroy-Swapping"
 
 
 class Exp3:

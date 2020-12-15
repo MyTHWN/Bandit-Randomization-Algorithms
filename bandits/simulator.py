@@ -8,12 +8,14 @@ from __future__ import print_function
 
 import time
 import numpy as np
+import multiprocessing as mp
 
 
 class BerBandit(object):
   """Bernoulli bandit."""
 
   def __init__(self, mu):
+    np.random.RandomState()
     self.mu = np.copy(mu)
     self.K = self.mu.size
 
@@ -23,7 +25,7 @@ class BerBandit(object):
 
   def randomize(self):
     # generate random rewards
-    self.rt = (np.random.rand() < self.mu).astype(float)
+    self.rt = (np.random.rand(self.K) < self.mu).astype(float)
 
   def reward(self, arm):
     # instantaneous reward of the arm
@@ -46,18 +48,18 @@ class BetaBandit(object):
   """Beta bandit."""
 
   def __init__(self, mu, a_plus_b=4):
+    np.random.RandomState()
     self.mu = np.copy(mu)
     self.K = self.mu.size
     self.a_plus_b = a_plus_b
 
     self.best_arm = np.argmax(self.mu)
-
     self.randomize()
 
   def randomize(self):
     # generate random rewards
-    self.rt = \
-      np.random.beta(self.a_plus_b * self.mu, self.a_plus_b * (1 - self.mu))
+    self.rt = np.random.beta(self.a_plus_b * self.mu,
+                             self.a_plus_b * (1 - self.mu))
 
   def reward(self, arm):
     # instantaneous reward of the arm
@@ -80,6 +82,7 @@ class GaussBandit(object):
   """Gaussian bandit."""
 
   def __init__(self, mu, sigma=0.5):
+    np.random.RandomState()
     self.mu = np.copy(mu)
     self.K = self.mu.size
     self.sigma = sigma
@@ -112,7 +115,8 @@ class GaussBandit(object):
 class LinBandit(object):
   """Linear bandit."""
 
-  def __init__(self, X, theta, noise="normal", sigma=0.2):
+  def __init__(self, X, theta, noise="normal", sigma=0.5):
+    np.random.RandomState()
     self.X = np.copy(X)
     self.K = self.X.shape[0]
     self.d = self.X.shape[1]
@@ -163,6 +167,7 @@ class LogBandit(object):
   """Logistic bandit."""
 
   def __init__(self, X, theta):
+    np.random.RandomState()
     self.X = np.copy(X)
     self.K = self.X.shape[0]
     self.d = self.X.shape[1]
@@ -312,3 +317,84 @@ def evaluate(Alg, params, env, n=1000, period_size=1, printout=True):
       np.median(total_regret), total_regret.max(), total_regret.min()))
 
   return regret, alg
+
+
+def evaluate_one_worker(Alg, params, exp_envs, n, period_size,
+                        shared_vars, exps):
+  """One run of a bandit algorithm."""
+  all_regret = shared_vars['all_regret']
+  all_alg = shared_vars['all_alg']
+  #ex = shared_vars['ex']
+  #lock = shared_vars['lock'] 
+
+  for exp in exps:
+    env = exp_envs[exp]
+    #print(exp)
+
+    alg = Alg(env, n, params)
+
+    regret = np.zeros(n // period_size)
+    for t in range(n):
+      # generate state
+      env.randomize()
+
+      # take action
+      arm = alg.get_arm(t)
+
+      # update model and regret
+      alg.update(t, arm, env.reward(arm))
+      regret_at_t = env.regret(arm)
+      regret[t // period_size] += regret_at_t
+
+    all_regret[:, exp] = regret
+    all_alg[exp] = alg
+
+    print(".", end="")
+
+
+def evaluate_parallel(Alg, params, exp_envs, n=1000, num_process=10,
+                      period_size=1, printout=True):
+  """Multiple runs of a bandit algorithm in parallel."""
+  if printout:
+    print("Evaluating %s" % Alg.print(), end="")
+  start = time.time()
+
+  num_exps = len(exp_envs)
+  #regret = np.zeros((n // period_size, num_exps))
+  #alg = num_exps * [None]
+
+  dots = np.linspace(0, num_exps - 1, 100).astype(int)
+
+  manager = mp.Manager()
+  shared_regret = mp.Array('d', np.zeros(n // period_size * num_exps))
+  all_regret = np.frombuffer(shared_regret.get_obj()).\
+                reshape((n // period_size, num_exps))
+  all_alg = manager.list(num_exps * [None])
+  exp_dist = np.ceil(np.linspace(0, num_exps, num_process+1)).astype(int)
+
+  #lock = manager.Lock()
+
+  shared_vars = {'all_regret':all_regret, 'all_alg':all_alg}
+  
+  jobs = []
+  for i in range(num_process):
+    ps = mp.Process(target=evaluate_one_worker, 
+          args=(Alg, params, exp_envs, n, period_size, 
+                shared_vars, range(exp_dist[i], exp_dist[i+1])))
+    jobs.append(ps)
+    ps.start()
+
+  for job in jobs:
+    job.join()
+
+  if printout:
+    print(" %.1f seconds" % (time.time() - start))
+
+  if printout:
+    total_regret = all_regret.sum(axis=0)
+    #print(total_regret)
+    print("Regret: %.2f +/- %.2f (median: %.2f, max: %.2f, min: %.2f)" %
+      (total_regret.mean(), total_regret.std() / np.sqrt(num_exps),
+      np.median(total_regret), total_regret.max(), total_regret.min()))
+
+  return all_regret, all_alg

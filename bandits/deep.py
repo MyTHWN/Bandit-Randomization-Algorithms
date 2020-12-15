@@ -15,7 +15,7 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 
-from google3.pyglib import gfile
+# from google3.pyglib import gfile
 
 
 class BinaryClassBandit(object):
@@ -234,6 +234,105 @@ class DeepFPL(object):
   @staticmethod
   def print():
     return "DeepFPL"
+
+
+class DeepHS:
+  """Deep follow the leader after swapping reward histories."""
+
+  def __init__(self, env, n, params):
+    self.env = env
+    self.n = n
+    self.K = self.env.X.shape[0]
+    self.d = self.env.X.shape[1]
+    self.swap_prob = 0.15
+
+    self.hidden_nodes = 0  # neural network architecture
+    self.hidden_activation = "relu"  # activation in the hidden layer
+
+    self.optimizer = "adam"  # gradient optimizer
+    self.lr = 1.0 / np.sqrt(self.n)  # learning rate
+    self.batch_size = 32  # mini-batch size
+
+    for attr, val in params.items():
+      setattr(self, attr, val)
+
+    # parse neural network architecture
+    if isinstance(self.hidden_nodes, int):
+      if not self.hidden_nodes:
+        self.hidden_nodes = ""
+      else:
+        self.hidden_nodes = str(self.hidden_nodes)
+    self.hidden_nodes = np.fromstring(self.hidden_nodes, dtype=int, sep="-")
+
+    # sufficient statistics
+    self.model_size = self.n  # model size
+    self.X = np.zeros((self.model_size, self.d))
+    self.y = np.zeros(self.model_size)
+
+    # neural net
+    self.num_layers = self.hidden_nodes.size
+    input = Input((self.d,))
+
+    if not self.num_layers:
+      output = Dense(1, activation="sigmoid")(input)
+    else:
+      hidden = Dense(self.hidden_nodes[0],
+        activation=self.hidden_activation)(input)
+      for layer in range(1, self.num_layers):
+        hidden = Dense(self.hidden_nodes[layer],
+          activation=self.hidden_activation)(hidden)
+      output = Dense(1, activation="sigmoid")(hidden)
+
+    self.model = Model(inputs=input, outputs=output)
+    if self.optimizer == "sgd":
+      self.model.compile(loss=perturbed_crossentropy,
+        optimizer=keras.optimizers.SGD(learning_rate=self.lr))
+    elif self.optimizer == "adam":
+      self.model.compile(loss=perturbed_crossentropy,
+        optimizer=keras.optimizers.Adam(learning_rate=self.lr))
+    elif self.optimizer == "rmsprop":
+      self.model.compile(loss=perturbed_crossentropy,
+        optimizer=keras.optimizers.RMSprop(learning_rate=self.lr))
+    else:
+      raise Exception("Unknown optimizer: %s" % self.optimizer)
+
+  def update(self, t, arm, r):
+    self.X[t, :] = self.env.X[arm, :]
+    self.y[t] = r
+
+    if t == self.n - 1:
+      keras.backend.clear_session()
+
+  def get_arm(self, t):
+    # # exponential learning rate decay from self.lr to 1e-4
+    # # stabilizes Adam when self.lr is high
+    # lrt = self.lr * np.exp(np.log(1e-4 / self.lr) * t / self.n)
+    # keras.backend.set_value(self.model.optimizer.learning_rate, lrt)
+
+    if t >= self.batch_size:
+      swapped_y = np.copy(self.y)
+      reward_pool = []
+      index_pool = np.where(np.random.random(swapped_y.size) \
+                            < self.swap_prob)[0]
+
+      reward_pool = swapped_y[index_pool]
+      np.random.shuffle(reward_pool)
+      swapped_y[index_pool] = reward_pool
+
+      sub = np.random.randint(t, size=self.batch_size)
+      self.model.train_on_batch(self.X[sub, :], swapped_y[sub])
+
+    if t >= max(self.batch_size, np.sqrt(self.d)):
+      self.mu = self.model.predict(self.env.X).flatten()
+    else:
+      self.mu = np.random.rand(self.K)
+
+    arm = np.argmax(self.mu)
+    return arm
+
+  @staticmethod
+  def print():
+    return "Deep History Swapping"
 
 
 class NeuralLinear(object):

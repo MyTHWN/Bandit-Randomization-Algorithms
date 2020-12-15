@@ -44,7 +44,7 @@ class DropoutExploration:
     drop_prob = self.drop_prob #* np.sqrt(self.K / (t + 1)) / 2
     drop_arms = (np.random.random(self.K) >= drop_prob).astype(int)
     muhat *= drop_arms
-    best_arm = np.argmax(muhat)
+    best_arm = np.argmax(muhat + 1e-6 * np.random.rand(self.K))
 
     # pull the arm
     arm = best_arm
