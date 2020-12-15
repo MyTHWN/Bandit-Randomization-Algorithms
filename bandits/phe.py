@@ -95,6 +95,7 @@ class PHE:
   def __init__(self, env, n, params):
     self.K = env.K
     self.a = 2
+    self.pseudo_reward = "bernoulli"
 
     for attr, val in params.items():
       setattr(self, attr, val)
@@ -117,9 +118,11 @@ class PHE:
     else:
       # history perturbation
       pseudo_pulls = np.ceil(self.a * self.pulls).astype(int)
-      pseudo_reward = np.random.binomial(pseudo_pulls, 0.5)
-      # pseudo_reward = np.random.normal(0.5 * pseudo_pulls, \
-      #                                  0.5 * np.sqrt(pseudo_pulls))
+      if self.pseudo_reward == "bernoulli":
+        pseudo_reward = np.random.binomial(pseudo_pulls, 0.5)
+      else:
+        pseudo_reward = np.random.normal(0.5 * pseudo_pulls, \
+                                         0.5 * np.sqrt(pseudo_pulls))
       self.mu = (self.reward + pseudo_reward) / \
         (self.pulls + pseudo_pulls) + self.tiebreak
 
